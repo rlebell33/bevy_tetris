@@ -93,8 +93,8 @@ fn main() {
         // Add a startup system to set up the game environment once.
         // This system will be responsible for things like setting up the camera and the UI.
         .add_systems(Startup, (setup_ui, setup_grid, spawn_tetromino).chain())
-        // Systems for handling user input
-        .add_systems(Update, handle_input.run_if(in_state(GameState::Playing)))
+        // Systems for handling user input. This will now run in all states.
+        .add_systems(Update, handle_input)
         
         // When we enter the Spawning state, we'll clear lines, spawn a new piece, and immediately
         // transition back to Playing.
@@ -120,8 +120,8 @@ fn setup_ui(mut commands: Commands) {
         ),
         TextFont {
             font_size: SCOREBOARD_FONT_SIZE,
-            ..default()
-        },
+                    ..default()
+                },
         TextColor(bevy::prelude::Color::WHITE),
         Node {
             position_type: PositionType::Absolute,
@@ -139,8 +139,8 @@ fn setup_ui(mut commands: Commands) {
         ),
         TextFont {
             font_size: SCOREBOARD_FONT_SIZE,
-            ..default()
-        },
+                    ..default()
+                },
         TextColor(bevy::prelude::Color::WHITE),
         Node {
             position_type: PositionType::Absolute,
@@ -184,8 +184,6 @@ fn handle_input(
     mut tetromino_query: Query<(Entity, &mut GridPosition), With<Tetromino>>,
     grid_query: Query<&GridPosition, Without<Tetromino>>,
 ) {
-    // Collect the positions of all static blocks once for collision checks
-    let static_blocks: Vec<GridPosition> = grid_query.iter().cloned().collect();
     // Toggle between Playing and Paused states
     if input.just_pressed(KeyCode::KeyP) {
         if *current_state.get() == GameState::Playing {
@@ -200,6 +198,8 @@ fn handle_input(
     
     // Only process movement input if the game is playing
     if *current_state.get() == GameState::Playing {
+        // Collect the positions of all static blocks once for collision checks
+        let static_blocks: Vec<GridPosition> = grid_query.iter().cloned().collect();
         // Handle rotation first, as it can block movement
         if input.just_pressed(KeyCode::ArrowUp) {
             let mut can_rotate = true;
