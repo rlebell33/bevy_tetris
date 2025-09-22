@@ -57,11 +57,16 @@ struct Score(u32);
 #[derive(Resource)]
 struct LinesCleared(u32);
 
+// A resource to track the current level.
+#[derive(Resource)]
+struct Level(u32);
+
 // A component to mark the entities that display the score and lines.
 #[derive(Component)]
 enum Scoreboard {
     Score,
     Lines,
+    Level,
 }
 
 // Constants for the game grid
@@ -69,7 +74,7 @@ const GRID_SIZE_X: i32 = 10;
 const GRID_SIZE_Y: i32 = 20;
 const BLOCK_SIZE: f32 = 25.0;
 
-//Constants for the Scoreboard UI
+// Constants for the Scoreboard UI
 const SCOREBOARD_FONT_SIZE: f32 = 25.0;
 const SCOREBOARD_TEXT_PADDING: Val = Val::Px(50.0);
 const SCOREBOARD_LINE_TEXT_PADDING: Val = Val::Px(50.0 + SCOREBOARD_FONT_SIZE);
@@ -89,6 +94,8 @@ fn main() {
         .insert_resource(Score(0))
         // Insert a resource to track the number of lines cleared.
         .insert_resource(LinesCleared(0))
+        // Insert a resource to track the current level, starting at 1.
+        .insert_resource(Level(1))
         
         // Add a startup system to set up the game environment once.
         // This system will be responsible for things like setting up the camera and the UI.
@@ -102,7 +109,9 @@ fn main() {
         // Add a system for the main game logic that runs during the `Playing` state.
         // `update_transforms` will sync grid positions with their visual transforms.
         .add_systems(Update, (gravity_system, update_transforms, update_scoreboard).run_if(in_state(GameState::Playing)))
-        
+        // System to update the fall speed when the level changes
+        .add_systems(Update, update_fall_speed)
+
         // Run the game!
         .run();
 }
@@ -113,13 +122,15 @@ fn setup_ui(mut commands: Commands) {
     commands.spawn(Camera2d::default());
     println!("Camera set up successfully!");
     
+    let x_pos = (GRID_SIZE_X as f32 / 2.0 + 1.0) * BLOCK_SIZE;
+    
     // Spawn the scoreboard text for the score.
     commands.spawn((
         Text::new(
             "Score: 0"
         ),
         TextFont {
-            font_size: SCOREBOARD_FONT_SIZE,
+                    font_size: SCOREBOARD_FONT_SIZE,
                     ..default()
                 },
         TextColor(bevy::prelude::Color::WHITE),
@@ -138,7 +149,7 @@ fn setup_ui(mut commands: Commands) {
             "Lines: 0"
         ),
         TextFont {
-            font_size: SCOREBOARD_FONT_SIZE,
+                    font_size: SCOREBOARD_FONT_SIZE,
                     ..default()
                 },
         TextColor(bevy::prelude::Color::WHITE),
@@ -150,6 +161,26 @@ fn setup_ui(mut commands: Commands) {
         },
         Scoreboard::Lines,
     ));
+
+    // Spawn the scoreboard text for the level.
+    commands.spawn((
+        Text::new(
+            "Level: 1"
+        ),
+        TextFont {
+            font_size: SCOREBOARD_FONT_SIZE,
+            ..default()
+        },
+        TextColor(bevy::prelude::Color::WHITE),
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Px(50.0 + 2.0 * SCOREBOARD_FONT_SIZE),
+            left: SCOREBOARD_TEXT_PADDING,
+            ..default()
+        },
+        Scoreboard::Level,
+    ));
+    
     println!("UI set up successfully!");
 }
 
@@ -379,6 +410,7 @@ fn update_transforms(mut query: Query<(&GridPosition, &mut Transform)>) {
 fn update_scoreboard(
     score: Res<Score>,
     lines_cleared: Res<LinesCleared>,
+    level: Res<Level>,
     mut query: Query<(&mut Text, &Scoreboard)>,
 ) {
     for (mut text, scoreboard) in query.iter_mut() {
@@ -393,8 +425,20 @@ fn update_scoreboard(
                     format!("Lines: {}", lines_cleared.0)
                 );
             }
+            Scoreboard::Level => {
+                *text = Text::new(format!("Level: {}", level.0));
+            }
         }
     }
+}
+
+// A system that updates the fall speed based on the current level.
+fn update_fall_speed(
+    level: Res<Level>,
+    mut fall_timer: ResMut<FallTimer>,
+) {
+    let speed_multiplier = 0.9_f32.powf((level.0 - 1) as f32);
+    fall_timer.set_duration(std::time::Duration::from_secs_f32(1.0 * speed_multiplier));
 }
 
 // Checks for collisions with the game board boundaries or other pieces.
@@ -526,6 +570,7 @@ fn clear_lines(
     mut commands: Commands,
     mut score: ResMut<Score>,
     mut lines_cleared: ResMut<LinesCleared>,
+    mut level: ResMut<Level>,
     mut grid_query: Query<(Entity, &mut GridPosition), Without<Tetromino>>,
 ) {
     // Group all static blocks by their Y coordinate.
@@ -563,6 +608,13 @@ fn clear_lines(
         println!("Cleared {} lines!", cleared_rows);
         score.0 += cleared_rows as u32;
         lines_cleared.0 += cleared_rows as u32;
+        
+        // Check if the level needs to be increased
+        if lines_cleared.0 / 5 > (level.0 - 1) {
+            level.0 += 1;
+            println!("Level up! Current Level: {}", level.0);
+        }
+        
         println!("Current Score: {}", score.0);
     }
 }
