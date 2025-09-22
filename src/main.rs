@@ -603,10 +603,17 @@ fn clear_lines(
         }
     }
     
-    // Update the score and lines cleared based on the number of lines cleared.
+    // Update the score based on the number of lines cleared and the current level
     if cleared_rows > 0 {
         println!("Cleared {} lines!", cleared_rows);
-        score.0 += cleared_rows as u32;
+        let points = match cleared_rows {
+            1 => 40,
+            2 => 100,
+            3 => 300,
+            4 => 1200,
+            _ => 0,
+        };
+        score.0 += points * (level.0 + 1);
         lines_cleared.0 += cleared_rows as u32;
         
         // Check if the level needs to be increased
