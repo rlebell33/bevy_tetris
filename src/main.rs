@@ -49,6 +49,10 @@ struct FallTimer(Timer);
 #[derive(Component, Debug, PartialEq, Eq, Clone, Copy)]
 pub struct RotationCenter(pub GridPosition);
 
+// A resource to track the player's score.
+#[derive(Resource)]
+struct Score(u32);
+
 // Constants for the game grid
 const GRID_SIZE_X: i32 = 10;
 const GRID_SIZE_Y: i32 = 20;
@@ -65,18 +69,17 @@ fn main() {
         
         // Insert a resource to control the fall speed.
         .insert_resource(FallTimer(Timer::from_seconds(1.0, TimerMode::Repeating)))
-
+        // Insert a resource to track the score.
+        .insert_resource(Score(0))
         // Add a startup system to set up the game environment once.
         // This system will be responsible for things like setting up the camera.
         .add_systems(Startup, (setup_camera, setup_grid, spawn_tetromino).chain())
-
         // Systems for handling user input
         .add_systems(Update, handle_input)
         
-        // When we enter the Spawning state, we'll spawn a new piece and immediately
+        // When we enter the Spawning state, we'll clear lines, spawn a new piece, and immediately
         // transition back to Playing.
-        .add_systems(OnEnter(GameState::Spawning), (spawn_tetromino, transition_to_playing).chain())
-
+        .add_systems(OnEnter(GameState::Spawning), (clear_lines, spawn_tetromino, transition_to_playing).chain())
         // Add a system for the main game logic that runs during the `Playing` state.
         // `update_transforms` will sync grid positions with their visual transforms.
         .add_systems(Update, (gravity_system, update_transforms).run_if(in_state(GameState::Playing)))
@@ -124,7 +127,6 @@ fn handle_input(
 ) {
     // Collect the positions of all static blocks once for collision checks
     let static_blocks: Vec<GridPosition> = grid_query.iter().cloned().collect();
-
     // Toggle between Playing and Paused states
     if input.just_pressed(KeyCode::KeyP) {
         if *current_state.get() == GameState::Playing {
@@ -189,7 +191,6 @@ fn handle_input(
                     break;
                 }
             }
-
             if can_move {
                 for (entity, mut position) in tetromino_query.iter_mut() {
                     position.x -= 1;
@@ -274,11 +275,9 @@ fn gravity_system(
     mut next_state: ResMut<NextState<GameState>>,
 ) {
     fall_timer.tick(time.delta());
-
     if fall_timer.finished() {
         // Collect the positions of all static blocks once for collision checks
         let static_blocks: Vec<GridPosition> = grid_query.iter().cloned().collect();
-
         let mut can_move = true;
         for (entity, position) in tetromino_query.iter() {
             let new_pos = GridPosition {
@@ -326,14 +325,12 @@ fn check_collision(
     if new_pos.x < 0 || new_pos.x >= GRID_SIZE_X || new_pos.y < 0 {
         return true;
     }
-
     // Check for collisions with other static blocks
     for static_pos in static_blocks.iter() {
         if static_pos.x == new_pos.x && static_pos.y == new_pos.y {
             return true;
         }
     }
-
     false
 }
 
@@ -349,10 +346,8 @@ fn spawn_tetromino(mut commands: Commands) {
         Shape::S,
         Shape::Z,
     ];
-
     // Pick a random shape from the list
-    let random_shape = shapes.choose(&mut rand::rng()).unwrap();
-
+    let random_shape = shapes.choose(&mut rand::thread_rng()).unwrap(); // Using a more robust rng
     // Define the blocks for each shape, relative to the piece's origin
     let blocks = match random_shape {
         Shape::I => vec![
@@ -398,7 +393,6 @@ fn spawn_tetromino(mut commands: Commands) {
             GridPosition { x: 1, y: 1 },
         ],
     };
-
     // Define the color for the tetromino based on its shape
     let color = match random_shape {
         Shape::I => bevy::prelude::Color::srgb(0.0, 1.0, 1.0), // Cyan
@@ -409,11 +403,9 @@ fn spawn_tetromino(mut commands: Commands) {
         Shape::S => bevy::prelude::Color::srgb(0.0, 1.0, 0.0), // Green
         Shape::Z => bevy::prelude::Color::srgb(1.0, 0.0, 0.0), // Red
     };
-
     // Set the initial position of the tetromino's origin
     let initial_y_offset = GRID_SIZE_Y as i32 - 1;
     let initial_x_offset = GRID_SIZE_X as i32 / 2 - 1;
-
     // Spawn the individual blocks for the new tetromino
     for block_position in blocks {
         commands.spawn((
@@ -429,11 +421,54 @@ fn spawn_tetromino(mut commands: Commands) {
             Tetromino,
         ));
     }
-
     println!("New tetromino spawned!");
 }
 
 // A system to handle the transition to the Playing state.
 fn transition_to_playing(mut next_state: ResMut<NextState<GameState>>) {
     next_state.set(GameState::Playing);
+}
+
+/// A system that checks for and clears full rows, and shifts blocks down.
+fn clear_lines(
+    mut commands: Commands,
+    mut score: ResMut<Score>,
+    mut grid_query: Query<(Entity, &mut GridPosition), Without<Tetromino>>,
+) {
+    // Group all static blocks by their Y coordinate.
+    let mut rows: HashMap<i32, Vec<Entity>> = HashMap::new();
+    for (entity, position) in grid_query.iter() {
+        rows.entry(position.y)
+            .or_insert_with(Vec::new)
+            .push(entity);
+    }
+    
+    let mut cleared_rows = 0;
+    // Iterate from the bottom up to check for full rows.
+    for y in 0..GRID_SIZE_Y {
+        if let Some(entities) = rows.get(&y) {
+            if entities.len() == GRID_SIZE_X as usize {
+                cleared_rows += 1;
+                // Despawn all entities in the cleared row.
+                for entity in entities {
+                    commands.entity(*entity).despawn();
+                }
+            } else if cleared_rows > 0 {
+                // If this row is not full, and we've cleared rows below it,
+                // move all blocks in this row down.
+                for entity in entities {
+                    if let Ok((_, mut position)) = grid_query.get_mut(*entity) {
+                        position.y -= cleared_rows;
+                    }
+                }
+            }
+        }
+    }
+    
+    // Update the score based on the number of lines cleared.
+    if cleared_rows > 0 {
+        println!("Cleared {} lines!", cleared_rows);
+        score.0 += cleared_rows as u32;
+        println!("Current Score: {}", score.0);
+    }
 }
