@@ -69,6 +69,11 @@ const GRID_SIZE_X: i32 = 10;
 const GRID_SIZE_Y: i32 = 20;
 const BLOCK_SIZE: f32 = 25.0;
 
+//Constants for the Scoreboard UI
+const SCOREBOARD_FONT_SIZE: f32 = 25.0;
+const SCOREBOARD_TEXT_PADDING: Val = Val::Px(50.0);
+const SCOREBOARD_LINE_TEXT_PADDING: Val = Val::Px(50.0 + SCOREBOARD_FONT_SIZE);
+
 fn main() {
     App::new()
         // Add the default Bevy plugins for rendering, window management, input, etc.
@@ -114,15 +119,16 @@ fn setup_ui(mut commands: Commands) {
             "Score: 0"
         ),
         TextFont {
-            font_size: 25.0,
+            font_size: SCOREBOARD_FONT_SIZE,
             ..default()
         },
         TextColor(bevy::prelude::Color::WHITE),
-        // Transform::from_translation(Vec3::new(
-        //     (GRID_SIZE_X as f32 / 2.0 + 1.0) * BLOCK_SIZE,
-        //     (GRID_SIZE_Y as f32 / 2.0 - 1.0) * BLOCK_SIZE,
-        //     1.0,
-        // )),
+        Node {
+            position_type: PositionType::Absolute,
+            top: SCOREBOARD_TEXT_PADDING,
+            left: SCOREBOARD_TEXT_PADDING,
+            ..default()
+        },
         Scoreboard::Score,
     ));
     
@@ -132,15 +138,16 @@ fn setup_ui(mut commands: Commands) {
             "Lines: 0"
         ),
         TextFont {
-            font_size: 25.0,
+            font_size: SCOREBOARD_FONT_SIZE,
             ..default()
         },
         TextColor(bevy::prelude::Color::WHITE),
-        // Transform::from_translation(Vec3::new(
-        //     (GRID_SIZE_X as f32 / 2.0 + 1.0) * BLOCK_SIZE,
-        //     (GRID_SIZE_Y as f32 / 2.0 - 2.0) * BLOCK_SIZE,
-        //     1.0,
-        // )),
+        Node {
+            position_type: PositionType::Absolute,
+            top: SCOREBOARD_LINE_TEXT_PADDING,
+            left: SCOREBOARD_TEXT_PADDING,
+            ..default()
+        },
         Scoreboard::Lines,
     ));
     println!("UI set up successfully!");
