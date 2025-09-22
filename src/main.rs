@@ -121,9 +121,7 @@ fn setup_ui(mut commands: Commands) {
     // Spawn the camera.
     commands.spawn(Camera2d::default());
     println!("Camera set up successfully!");
-    
-    let x_pos = (GRID_SIZE_X as f32 / 2.0 + 1.0) * BLOCK_SIZE;
-    
+        
     // Spawn the scoreboard text for the score.
     commands.spawn((
         Text::new(
@@ -214,6 +212,7 @@ fn handle_input(
     mut next_state: ResMut<NextState<GameState>>,
     mut tetromino_query: Query<(Entity, &mut GridPosition), With<Tetromino>>,
     grid_query: Query<&GridPosition, Without<Tetromino>>,
+    grid_entities: Query<Entity, With<GridPosition>>,
 ) {
     // Toggle between Playing and Paused states
     if input.just_pressed(KeyCode::KeyP) {
@@ -224,6 +223,23 @@ fn handle_input(
             next_state.set(GameState::Playing);
             println!("Game Resumed");
         }
+        return;
+    }
+
+    // Clear the board and Reset the game to the Spawning state when 'R' is pressed
+    if input.just_pressed(KeyCode::KeyR) {
+        println!("Game Reset");
+        // Despawn all tetromino blocks
+        for entity in grid_entities.iter() {
+            commands.entity(entity).despawn();
+        }
+
+        // Reset score, lines cleared, and level
+        commands.insert_resource(Score(0));
+        commands.insert_resource(LinesCleared(0));
+        commands.insert_resource(Level(1));
+
+        next_state.set(GameState::Spawning);
         return;
     }
     
