@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use rand::seq::{IndexedRandom};
+use rand::seq::IndexedRandom;
 use std::collections::HashMap;
 
 // We'll define our game states here later to control the game flow (e.g., MainMenu, Playing, GameOver).
@@ -88,11 +88,9 @@ fn main() {
     App::new()
         // Add the default Bevy plugins for rendering, window management, input, etc.
         .add_plugins(DefaultPlugins)
-        
         // This is where we'll add our game state logic.
         // We're initializing it to the "Playing" state.
         .init_state::<GameState>()
-        
         // Insert a resource to control the fall speed.
         .insert_resource(FallTimer(Timer::from_seconds(1.0, TimerMode::Repeating)))
         // Insert a resource to track the score.
@@ -101,31 +99,34 @@ fn main() {
         .insert_resource(LinesCleared(0))
         // Insert a resource to track the current level, starting at 1.
         .insert_resource(Level(1))
-        
         // Add a startup system to set up the game environment once.
         // This system will be responsible for things like setting up the camera.
         .add_systems(Startup, setup_camera)
-
         // Add systems for the Title state
-        .add_systems(OnEnter(GameState::Title), (setup_title_screen, despawn_game_board).chain())
+        .add_systems(
+            OnEnter(GameState::Title),
+            (setup_title_screen, despawn_game_board).chain(),
+        )
         .add_systems(OnExit(GameState::Title), despawn_title_screen)
-
         // Add systems for the Playing state
         // .add_systems(OnEnter(GameState::Playing), (setup_grid, spawn_tetromino, setup_scoreboard).chain())
-        
         // Systems for handling user input. This will now run in all states.
         .add_systems(Update, handle_input)
-        
         // When we enter the Spawning state, we'll clear lines, spawn a new piece, and immediately
         // transition back to Playing.
-        .add_systems(OnEnter(GameState::Spawning), (clear_lines, setup_grid, spawn_tetromino, setup_scoreboard).chain())
-        
+        .add_systems(
+            OnEnter(GameState::Spawning),
+            (clear_lines, setup_grid, spawn_tetromino, setup_scoreboard).chain(),
+        )
         // Add a system for the main game logic that runs during the `Playing` state.
         // `update_transforms` will sync grid positions with their visual transforms.
-        .add_systems(Update, (gravity_system, update_transforms, update_scoreboard).run_if(in_state(GameState::Playing)))
+        .add_systems(
+            Update,
+            (gravity_system, update_transforms, update_scoreboard)
+                .run_if(in_state(GameState::Playing)),
+        )
         // System to update the fall speed when the level changes
         .add_systems(Update, update_fall_speed)
-
         // Run the game!
         .run();
 }
@@ -138,7 +139,7 @@ fn setup_camera(mut commands: Commands) {
 }
 
 // A system to set up the title screen UI.
-fn setup_title_screen(mut commands: Commands, asset_server: Res<AssetServer>) {
+fn setup_title_screen(mut commands: Commands) {
     // A separate camera for the UI to prevent it from moving with the game camera
     commands.spawn((
         Camera2d::default(),
@@ -166,7 +167,7 @@ fn setup_title_screen(mut commands: Commands, asset_server: Res<AssetServer>) {
             margin: UiRect {
                 left: Val::Px(-150.0), // Approximate half the width of the text
                 ..default()
-            },            
+            },
             ..default()
         },
         TitleScreen,
@@ -188,7 +189,7 @@ fn setup_title_screen(mut commands: Commands, asset_server: Res<AssetServer>) {
             margin: UiRect {
                 left: Val::Px(-70.0), // Approximate half the width of the text
                 ..default()
-            },         
+            },
             ..default()
         },
         TitleScreen,
@@ -203,7 +204,13 @@ fn despawn_title_screen(mut commands: Commands, query: Query<Entity, With<TitleS
     }
 }
 
-fn despawn_game_board(mut commands: Commands, query1: Query<Entity, With<GridPosition>>, query2: Query<Entity, With<Scoreboard>>, query3: Query<Entity, With<Tetromino>>, query4: Query<Entity, With<Sprite>>) {
+fn despawn_game_board(
+    mut commands: Commands,
+    query1: Query<Entity, With<GridPosition>>,
+    query2: Query<Entity, With<Scoreboard>>,
+    query3: Query<Entity, With<Tetromino>>,
+    query4: Query<Entity, With<Sprite>>,
+) {
     for entity in query1.iter() {
         commands.entity(entity).despawn();
     }
@@ -219,16 +226,14 @@ fn despawn_game_board(mut commands: Commands, query1: Query<Entity, With<GridPos
 }
 
 // A system to set up the scoreboard UI.
-fn setup_scoreboard(mut commands: Commands, asset_server: Res<AssetServer>) {
+fn setup_scoreboard(mut commands: Commands) {
     // Spawn the score, lines, and level text in a single container for clean UI
     commands.spawn((
-        Text::new(
-            "Score: 0"
-        ),
+        Text::new("Score: 0"),
         TextFont {
-                    font_size: SCOREBOARD_FONT_SIZE,
-                    ..default()
-                },
+            font_size: SCOREBOARD_FONT_SIZE,
+            ..default()
+        },
         TextColor(bevy::prelude::Color::WHITE),
         Node {
             position_type: PositionType::Absolute,
@@ -238,16 +243,14 @@ fn setup_scoreboard(mut commands: Commands, asset_server: Res<AssetServer>) {
         },
         Scoreboard::Score,
     ));
-    
+
     // Spawn the scoreboard text for the lines cleared.
     commands.spawn((
-        Text::new(
-            "Lines: 0"
-        ),
+        Text::new("Lines: 0"),
         TextFont {
-                    font_size: SCOREBOARD_FONT_SIZE,
-                    ..default()
-                },
+            font_size: SCOREBOARD_FONT_SIZE,
+            ..default()
+        },
         TextColor(bevy::prelude::Color::WHITE),
         Node {
             position_type: PositionType::Absolute,
@@ -260,9 +263,7 @@ fn setup_scoreboard(mut commands: Commands, asset_server: Res<AssetServer>) {
 
     // Spawn the scoreboard text for the level.
     commands.spawn((
-        Text::new(
-            "Level: 1"
-        ),
+        Text::new("Level: 1"),
         TextFont {
             font_size: SCOREBOARD_FONT_SIZE,
             ..default()
@@ -330,9 +331,13 @@ fn handle_input(
         }
         return;
     }
-    
+
     // Reset the game when 'R' is pressed
-    if input.just_pressed(KeyCode::KeyR) && (*current_state.get() == GameState::Playing || *current_state.get() == GameState::Paused || *current_state.get() == GameState::GameOver) {
+    if input.just_pressed(KeyCode::KeyR)
+        && (*current_state.get() == GameState::Playing
+            || *current_state.get() == GameState::Paused
+            || *current_state.get() == GameState::GameOver)
+    {
         println!("Resetting Game");
         for entity in grid_entities.iter() {
             commands.entity(entity).despawn();
@@ -343,7 +348,7 @@ fn handle_input(
         next_state.set(GameState::Title);
         return;
     }
-    
+
     // Only process movement input if the game is playing
     if *current_state.get() == GameState::Playing {
         // Collect the positions of all static blocks once for collision checks
@@ -352,32 +357,32 @@ fn handle_input(
         if input.just_pressed(KeyCode::ArrowUp) {
             let mut can_rotate = true;
             let mut new_positions = Vec::new();
-            
+
             // For a simple Tetris clone, we can assume the rotation center is the 2nd block
             // of a given tetromino.
             let rotation_center = tetromino_query.iter().nth(1).unwrap().1.clone();
-            
+
             for (entity, position) in tetromino_query.iter() {
                 // Calculate position relative to the rotation center
                 let relative_x = position.x - rotation_center.x;
                 let relative_y = position.y - rotation_center.y;
-                
+
                 // Rotate 90 degrees clockwise (x, y) -> (y, -x)
                 let rotated_x = relative_y;
                 let rotated_y = -relative_x;
-                
+
                 let new_pos = GridPosition {
                     x: rotated_x + rotation_center.x,
                     y: rotated_y + rotation_center.y,
                 };
-                
+
                 if check_collision(new_pos, &static_blocks) {
                     can_rotate = false;
                     break;
                 }
                 new_positions.push((entity, new_pos));
             }
-            
+
             if can_rotate {
                 for (entity, new_pos) in new_positions {
                     let mut position = tetromino_query.get_mut(entity).unwrap().1;
@@ -385,7 +390,7 @@ fn handle_input(
                 }
             }
         }
-        
+
         if input.just_pressed(KeyCode::ArrowLeft) {
             let mut can_move = true;
             for (_entity, position) in tetromino_query.iter() {
@@ -456,7 +461,7 @@ fn handle_input(
                     }
                     temp_positions.push(new_pos);
                 }
-                
+
                 if can_move {
                     for (_entity, mut position) in tetromino_query.iter_mut() {
                         position.y -= 1;
@@ -496,7 +501,7 @@ fn gravity_system(
                 break;
             }
         }
-        
+
         if can_move {
             for (_entity, mut position) in tetromino_query.iter_mut() {
                 position.y -= 1;
@@ -533,14 +538,10 @@ fn update_scoreboard(
     for (mut text, scoreboard) in query.iter_mut() {
         match scoreboard {
             Scoreboard::Score => {
-                *text = Text::new(
-                    format!("Score: {}", score.0)
-                );
+                *text = Text::new(format!("Score: {}", score.0));
             }
             Scoreboard::Lines => {
-                *text = Text::new(
-                    format!("Lines: {}", lines_cleared.0)
-                );
+                *text = Text::new(format!("Lines: {}", lines_cleared.0));
             }
             Scoreboard::Level => {
                 *text = Text::new(format!("Level: {}", level.0));
@@ -550,19 +551,13 @@ fn update_scoreboard(
 }
 
 // A system that updates the fall speed based on the current level.
-fn update_fall_speed(
-    level: Res<Level>,
-    mut fall_timer: ResMut<FallTimer>,
-) {
+fn update_fall_speed(level: Res<Level>, mut fall_timer: ResMut<FallTimer>) {
     let speed_multiplier = 0.9_f32.powf((level.0 - 1) as f32);
     fall_timer.set_duration(std::time::Duration::from_secs_f32(1.0 * speed_multiplier));
 }
 
 // Checks for collisions with the game board boundaries or other pieces.
-fn check_collision(
-    new_pos: GridPosition,
-    static_blocks: &[GridPosition],
-) -> bool {
+fn check_collision(new_pos: GridPosition, static_blocks: &[GridPosition]) -> bool {
     // Check for collisions with the floor or walls
     if new_pos.x < 0 || new_pos.x >= GRID_SIZE_X || new_pos.y < 0 {
         return true;
@@ -577,7 +572,11 @@ fn check_collision(
 }
 
 // Spawns a new tetromino and transitions the state.
-fn spawn_tetromino(mut commands: Commands, mut next_state: ResMut<NextState<GameState>>, grid_query: Query<&GridPosition, Without<Tetromino>>) {
+fn spawn_tetromino(
+    mut commands: Commands,
+    mut next_state: ResMut<NextState<GameState>>,
+    grid_query: Query<&GridPosition, Without<Tetromino>>,
+) {
     // A list of the seven tetromino shapes
     let shapes = [
         Shape::I,
@@ -648,7 +647,7 @@ fn spawn_tetromino(mut commands: Commands, mut next_state: ResMut<NextState<Game
     // Set the initial position of the tetromino's origin
     let initial_y_offset = GRID_SIZE_Y as i32 - 1;
     let initial_x_offset = GRID_SIZE_X as i32 / 2 - 1;
-    
+
     // Check for game over condition
     let static_blocks: Vec<GridPosition> = grid_query.iter().cloned().collect();
     for block_position in &blocks {
@@ -662,7 +661,7 @@ fn spawn_tetromino(mut commands: Commands, mut next_state: ResMut<NextState<Game
             return;
         }
     }
-    
+
     // Spawn the individual blocks for the new tetromino
     for block_position in blocks {
         commands.spawn((
@@ -693,11 +692,9 @@ fn clear_lines(
     // Group all static blocks by their Y coordinate.
     let mut rows: HashMap<i32, Vec<Entity>> = HashMap::new();
     for (entity, position) in grid_query.iter() {
-        rows.entry(position.y)
-            .or_insert_with(Vec::new)
-            .push(entity);
+        rows.entry(position.y).or_insert_with(Vec::new).push(entity);
     }
-    
+
     let mut cleared_rows = 0;
     // Iterate from the bottom up to check for full rows.
     for y in 0..GRID_SIZE_Y {
@@ -719,7 +716,7 @@ fn clear_lines(
             }
         }
     }
-    
+
     // Update the score based on the number of lines cleared and the current level
     if cleared_rows > 0 {
         println!("Cleared {} lines!", cleared_rows);
@@ -732,13 +729,13 @@ fn clear_lines(
         };
         score.0 += points * (level.0 + 1);
         lines_cleared.0 += cleared_rows as u32;
-        
+
         // Check if the level needs to be increased
         if lines_cleared.0 / 5 > (level.0 - 1) {
             level.0 += 1;
             println!("Level up! Current Level: {}", level.0);
         }
-        
+
         println!("Current Score: {}", score.0);
     }
 }
