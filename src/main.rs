@@ -53,6 +53,17 @@ pub struct RotationCenter(pub GridPosition);
 #[derive(Resource)]
 struct Score(u32);
 
+// A resource to track the number of lines cleared.
+#[derive(Resource)]
+struct LinesCleared(u32);
+
+// A component to mark the entities that display the score and lines.
+#[derive(Component)]
+enum Scoreboard {
+    Score,
+    Lines,
+}
+
 // Constants for the game grid
 const GRID_SIZE_X: i32 = 10;
 const GRID_SIZE_Y: i32 = 20;
@@ -71,9 +82,12 @@ fn main() {
         .insert_resource(FallTimer(Timer::from_seconds(1.0, TimerMode::Repeating)))
         // Insert a resource to track the score.
         .insert_resource(Score(0))
+        // Insert a resource to track the number of lines cleared.
+        .insert_resource(LinesCleared(0))
+        
         // Add a startup system to set up the game environment once.
-        // This system will be responsible for things like setting up the camera.
-        .add_systems(Startup, (setup_camera, setup_grid, spawn_tetromino).chain())
+        // This system will be responsible for things like setting up the camera and the UI.
+        .add_systems(Startup, (setup_ui, setup_grid, spawn_tetromino).chain())
         // Systems for handling user input
         .add_systems(Update, handle_input.run_if(in_state(GameState::Playing)))
         
@@ -82,16 +96,54 @@ fn main() {
         .add_systems(OnEnter(GameState::Spawning), (clear_lines, spawn_tetromino).chain())
         // Add a system for the main game logic that runs during the `Playing` state.
         // `update_transforms` will sync grid positions with their visual transforms.
-        .add_systems(Update, (gravity_system, update_transforms).run_if(in_state(GameState::Playing)))
+        .add_systems(Update, (gravity_system, update_transforms, update_scoreboard).run_if(in_state(GameState::Playing)))
         
         // Run the game!
         .run();
 }
 
-// A startup system to spawn a 2D camera. Without a camera, nothing will be rendered.
-fn setup_camera(mut commands: Commands) {
+// A startup system to spawn a 2D camera and the UI text.
+fn setup_ui(mut commands: Commands) {
+    // Spawn the camera.
     commands.spawn(Camera2d::default());
     println!("Camera set up successfully!");
+    
+    // Spawn the scoreboard text for the score.
+    commands.spawn((
+        Text::new(
+            "Score: 0"
+        ),
+        TextFont {
+            font_size: 25.0,
+            ..default()
+        },
+        TextColor(bevy::prelude::Color::WHITE),
+        // Transform::from_translation(Vec3::new(
+        //     (GRID_SIZE_X as f32 / 2.0 + 1.0) * BLOCK_SIZE,
+        //     (GRID_SIZE_Y as f32 / 2.0 - 1.0) * BLOCK_SIZE,
+        //     1.0,
+        // )),
+        Scoreboard::Score,
+    ));
+    
+    // Spawn the scoreboard text for the lines cleared.
+    commands.spawn((
+        Text::new(
+            "Lines: 0"
+        ),
+        TextFont {
+            font_size: 25.0,
+            ..default()
+        },
+        TextColor(bevy::prelude::Color::WHITE),
+        // Transform::from_translation(Vec3::new(
+        //     (GRID_SIZE_X as f32 / 2.0 + 1.0) * BLOCK_SIZE,
+        //     (GRID_SIZE_Y as f32 / 2.0 - 2.0) * BLOCK_SIZE,
+        //     1.0,
+        // )),
+        Scoreboard::Lines,
+    ));
+    println!("UI set up successfully!");
 }
 
 // A startup system to spawn the empty grid squares.
@@ -316,6 +368,28 @@ fn update_transforms(mut query: Query<(&GridPosition, &mut Transform)>) {
     }
 }
 
+// A system that updates the scoreboard UI.
+fn update_scoreboard(
+    score: Res<Score>,
+    lines_cleared: Res<LinesCleared>,
+    mut query: Query<(&mut Text, &Scoreboard)>,
+) {
+    for (mut text, scoreboard) in query.iter_mut() {
+        match scoreboard {
+            Scoreboard::Score => {
+                *text = Text::new(
+                    format!("Score: {}", score.0)
+                );
+            }
+            Scoreboard::Lines => {
+                *text = Text::new(
+                    format!("Lines: {}", lines_cleared.0)
+                );
+            }
+        }
+    }
+}
+
 // Checks for collisions with the game board boundaries or other pieces.
 fn check_collision(
     new_pos: GridPosition,
@@ -347,7 +421,7 @@ fn spawn_tetromino(mut commands: Commands, mut next_state: ResMut<NextState<Game
         Shape::Z,
     ];
     // Pick a random shape from the list
-    let random_shape = shapes.choose(&mut rand::rng()).unwrap(); // Using a more robust rng
+    let random_shape = shapes.choose(&mut rand::rng()).unwrap();
     // Define the blocks for each shape, relative to the piece's origin
     let blocks = match random_shape {
         Shape::I => vec![
@@ -444,6 +518,7 @@ fn spawn_tetromino(mut commands: Commands, mut next_state: ResMut<NextState<Game
 fn clear_lines(
     mut commands: Commands,
     mut score: ResMut<Score>,
+    mut lines_cleared: ResMut<LinesCleared>,
     mut grid_query: Query<(Entity, &mut GridPosition), Without<Tetromino>>,
 ) {
     // Group all static blocks by their Y coordinate.
@@ -476,10 +551,11 @@ fn clear_lines(
         }
     }
     
-    // Update the score based on the number of lines cleared.
+    // Update the score and lines cleared based on the number of lines cleared.
     if cleared_rows > 0 {
         println!("Cleared {} lines!", cleared_rows);
         score.0 += cleared_rows as u32;
+        lines_cleared.0 += cleared_rows as u32;
         println!("Current Score: {}", score.0);
     }
 }
