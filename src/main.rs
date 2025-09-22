@@ -6,6 +6,7 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Hash, States)]
 enum GameState {
     #[default]
+    Title,
     Playing,
     Paused,
     Spawning,
@@ -69,6 +70,10 @@ enum Scoreboard {
     Level,
 }
 
+// A component to identify all entities on the title screen
+#[derive(Component)]
+struct TitleScreen;
+
 // Constants for the game grid
 const GRID_SIZE_X: i32 = 10;
 const GRID_SIZE_Y: i32 = 20;
@@ -98,14 +103,23 @@ fn main() {
         .insert_resource(Level(1))
         
         // Add a startup system to set up the game environment once.
-        // This system will be responsible for things like setting up the camera and the UI.
-        .add_systems(Startup, (setup_ui, setup_grid, spawn_tetromino).chain())
+        // This system will be responsible for things like setting up the camera.
+        .add_systems(Startup, setup_camera)
+
+        // Add systems for the Title state
+        .add_systems(OnEnter(GameState::Title), (setup_title_screen, despawn_game_board).chain())
+        .add_systems(OnExit(GameState::Title), despawn_title_screen)
+
+        // Add systems for the Playing state
+        // .add_systems(OnEnter(GameState::Playing), (setup_grid, spawn_tetromino, setup_scoreboard).chain())
+        
         // Systems for handling user input. This will now run in all states.
         .add_systems(Update, handle_input)
         
         // When we enter the Spawning state, we'll clear lines, spawn a new piece, and immediately
         // transition back to Playing.
-        .add_systems(OnEnter(GameState::Spawning), (clear_lines, spawn_tetromino).chain())
+        .add_systems(OnEnter(GameState::Spawning), (clear_lines, setup_grid, spawn_tetromino, setup_scoreboard).chain())
+        
         // Add a system for the main game logic that runs during the `Playing` state.
         // `update_transforms` will sync grid positions with their visual transforms.
         .add_systems(Update, (gravity_system, update_transforms, update_scoreboard).run_if(in_state(GameState::Playing)))
@@ -117,12 +131,96 @@ fn main() {
 }
 
 // A startup system to spawn a 2D camera and the UI text.
-fn setup_ui(mut commands: Commands) {
+fn setup_camera(mut commands: Commands) {
     // Spawn the camera.
     commands.spawn(Camera2d::default());
     println!("Camera set up successfully!");
-        
-    // Spawn the scoreboard text for the score.
+}
+
+// A system to set up the title screen UI.
+fn setup_title_screen(mut commands: Commands, asset_server: Res<AssetServer>) {
+    // A separate camera for the UI to prevent it from moving with the game camera
+    commands.spawn((
+        Camera2d::default(),
+        Camera {
+            // Renders the title screen UI on top of the main camera
+            order: 1,
+            ..default()
+        },
+        TitleScreen,
+    ));
+
+    // Title text
+    commands.spawn((
+        Text::new("Tetris Remake"),
+        TextFont {
+            font_size: 50.0,
+            ..default()
+        },
+        TextColor(bevy::prelude::Color::WHITE),
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Px(200.0),
+            left: Val::Percent(50.0),
+            // offset by half the text width to truly center it
+            margin: UiRect {
+                left: Val::Px(-150.0), // Approximate half the width of the text
+                ..default()
+            },            
+            ..default()
+        },
+        TitleScreen,
+    ));
+
+    // Instructions
+    commands.spawn((
+        Text::new("Press SPACE to start"),
+        TextFont {
+            font_size: 20.0,
+            ..default()
+        },
+        TextColor(bevy::prelude::Color::WHITE),
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Px(300.0),
+            left: Val::Percent(50.0),
+            // offset by half the text width to truly center it
+            margin: UiRect {
+                left: Val::Px(-70.0), // Approximate half the width of the text
+                ..default()
+            },         
+            ..default()
+        },
+        TitleScreen,
+    ));
+    println!("Title screen set up successfully!");
+}
+
+// A system to despawn the title screen entities.
+fn despawn_title_screen(mut commands: Commands, query: Query<Entity, With<TitleScreen>>) {
+    for entity in query.iter() {
+        commands.entity(entity).despawn();
+    }
+}
+
+fn despawn_game_board(mut commands: Commands, query1: Query<Entity, With<GridPosition>>, query2: Query<Entity, With<Scoreboard>>, query3: Query<Entity, With<Tetromino>>, query4: Query<Entity, With<Sprite>>) {
+    for entity in query1.iter() {
+        commands.entity(entity).despawn();
+    }
+    for entity in query2.iter() {
+        commands.entity(entity).despawn();
+    }
+    for entity in query3.iter() {
+        commands.entity(entity).despawn();
+    }
+    for entity in query4.iter() {
+        commands.entity(entity).despawn();
+    }
+}
+
+// A system to set up the scoreboard UI.
+fn setup_scoreboard(mut commands: Commands, asset_server: Res<AssetServer>) {
+    // Spawn the score, lines, and level text in a single container for clean UI
     commands.spawn((
         Text::new(
             "Score: 0"
@@ -178,7 +276,7 @@ fn setup_ui(mut commands: Commands) {
         },
         Scoreboard::Level,
     ));
-    
+
     println!("UI set up successfully!");
 }
 
@@ -214,6 +312,13 @@ fn handle_input(
     grid_query: Query<&GridPosition, Without<Tetromino>>,
     grid_entities: Query<Entity, With<GridPosition>>,
 ) {
+    // Start the game from the title screen
+    if *current_state.get() == GameState::Title && input.just_pressed(KeyCode::Space) {
+        next_state.set(GameState::Spawning);
+        println!("Game started!");
+        return;
+    }
+
     // Toggle between Playing and Paused states
     if input.just_pressed(KeyCode::KeyP) {
         if *current_state.get() == GameState::Playing {
@@ -225,21 +330,17 @@ fn handle_input(
         }
         return;
     }
-
-    // Clear the board and Reset the game to the Spawning state when 'R' is pressed
-    if input.just_pressed(KeyCode::KeyR) {
-        println!("Game Reset");
-        // Despawn all tetromino blocks
+    
+    // Reset the game when 'R' is pressed
+    if input.just_pressed(KeyCode::KeyR) && (*current_state.get() == GameState::Playing || *current_state.get() == GameState::Paused || *current_state.get() == GameState::GameOver) {
+        println!("Resetting Game");
         for entity in grid_entities.iter() {
             commands.entity(entity).despawn();
         }
-
-        // Reset score, lines cleared, and level
         commands.insert_resource(Score(0));
         commands.insert_resource(LinesCleared(0));
         commands.insert_resource(Level(1));
-
-        next_state.set(GameState::Spawning);
+        next_state.set(GameState::Title);
         return;
     }
     
