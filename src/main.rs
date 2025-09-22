@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use rand::seq::{IndexedRandom, SliceRandom};
+use rand::seq::{IndexedRandom};
 use std::collections::HashMap;
 
 // We'll define our game states here later to control the game flow (e.g., MainMenu, Playing, GameOver).
@@ -75,11 +75,11 @@ fn main() {
         // This system will be responsible for things like setting up the camera.
         .add_systems(Startup, (setup_camera, setup_grid, spawn_tetromino).chain())
         // Systems for handling user input
-        .add_systems(Update, handle_input)
+        .add_systems(Update, handle_input.run_if(in_state(GameState::Playing)))
         
         // When we enter the Spawning state, we'll clear lines, spawn a new piece, and immediately
         // transition back to Playing.
-        .add_systems(OnEnter(GameState::Spawning), (clear_lines, spawn_tetromino, transition_to_playing).chain())
+        .add_systems(OnEnter(GameState::Spawning), (clear_lines, spawn_tetromino).chain())
         // Add a system for the main game logic that runs during the `Playing` state.
         // `update_transforms` will sync grid positions with their visual transforms.
         .add_systems(Update, (gravity_system, update_transforms).run_if(in_state(GameState::Playing)))
@@ -181,7 +181,7 @@ fn handle_input(
         
         if input.just_pressed(KeyCode::ArrowLeft) {
             let mut can_move = true;
-            for (entity, position) in tetromino_query.iter() {
+            for (_entity, position) in tetromino_query.iter() {
                 let new_pos = GridPosition {
                     x: position.x - 1,
                     y: position.y,
@@ -192,14 +192,14 @@ fn handle_input(
                 }
             }
             if can_move {
-                for (entity, mut position) in tetromino_query.iter_mut() {
+                for (_entity, mut position) in tetromino_query.iter_mut() {
                     position.x -= 1;
                 }
             }
         }
         if input.just_pressed(KeyCode::ArrowRight) {
             let mut can_move = true;
-            for (entity, position) in tetromino_query.iter() {
+            for (_entity, position) in tetromino_query.iter() {
                 let new_pos = GridPosition {
                     x: position.x + 1,
                     y: position.y,
@@ -210,14 +210,14 @@ fn handle_input(
                 }
             }
             if can_move {
-                for (entity, mut position) in tetromino_query.iter_mut() {
+                for (_entity, mut position) in tetromino_query.iter_mut() {
                     position.x += 1;
                 }
             }
         }
         if input.just_pressed(KeyCode::ArrowDown) {
             let mut can_move = true;
-            for (entity, position) in tetromino_query.iter() {
+            for (_entity, position) in tetromino_query.iter() {
                 let new_pos = GridPosition {
                     x: position.x,
                     y: position.y - 1,
@@ -228,7 +228,7 @@ fn handle_input(
                 }
             }
             if can_move {
-                for (entity, mut position) in tetromino_query.iter_mut() {
+                for (_entity, mut position) in tetromino_query.iter_mut() {
                     position.y -= 1;
                 }
             }
@@ -238,7 +238,7 @@ fn handle_input(
             let mut can_move = true;
             while can_move {
                 let mut temp_positions: Vec<GridPosition> = Vec::new();
-                for (entity, position) in tetromino_query.iter() {
+                for (_entity, position) in tetromino_query.iter() {
                     let new_pos = GridPosition {
                         x: position.x,
                         y: position.y - 1,
@@ -251,7 +251,7 @@ fn handle_input(
                 }
                 
                 if can_move {
-                    for (entity, mut position) in tetromino_query.iter_mut() {
+                    for (_entity, mut position) in tetromino_query.iter_mut() {
                         position.y -= 1;
                     }
                 } else {
@@ -279,7 +279,7 @@ fn gravity_system(
         // Collect the positions of all static blocks once for collision checks
         let static_blocks: Vec<GridPosition> = grid_query.iter().cloned().collect();
         let mut can_move = true;
-        for (entity, position) in tetromino_query.iter() {
+        for (_entity, position) in tetromino_query.iter() {
             let new_pos = GridPosition {
                 x: position.x,
                 y: position.y - 1,
@@ -291,7 +291,7 @@ fn gravity_system(
         }
         
         if can_move {
-            for (entity, mut position) in tetromino_query.iter_mut() {
+            for (_entity, mut position) in tetromino_query.iter_mut() {
                 position.y -= 1;
             }
         } else {
@@ -335,7 +335,7 @@ fn check_collision(
 }
 
 // Spawns a new tetromino and transitions the state.
-fn spawn_tetromino(mut commands: Commands) {
+fn spawn_tetromino(mut commands: Commands, mut next_state: ResMut<NextState<GameState>>, grid_query: Query<&GridPosition, Without<Tetromino>>) {
     // A list of the seven tetromino shapes
     let shapes = [
         Shape::I,
@@ -347,7 +347,7 @@ fn spawn_tetromino(mut commands: Commands) {
         Shape::Z,
     ];
     // Pick a random shape from the list
-    let random_shape = shapes.choose(&mut rand::thread_rng()).unwrap(); // Using a more robust rng
+    let random_shape = shapes.choose(&mut rand::rng()).unwrap(); // Using a more robust rng
     // Define the blocks for each shape, relative to the piece's origin
     let blocks = match random_shape {
         Shape::I => vec![
@@ -406,6 +406,21 @@ fn spawn_tetromino(mut commands: Commands) {
     // Set the initial position of the tetromino's origin
     let initial_y_offset = GRID_SIZE_Y as i32 - 1;
     let initial_x_offset = GRID_SIZE_X as i32 / 2 - 1;
+    
+    // Check for game over condition
+    let static_blocks: Vec<GridPosition> = grid_query.iter().cloned().collect();
+    for block_position in &blocks {
+        let new_pos = GridPosition {
+            x: block_position.x + initial_x_offset,
+            y: block_position.y + initial_y_offset,
+        };
+        if check_collision(new_pos, &static_blocks) {
+            println!("Game Over!");
+            next_state.set(GameState::GameOver);
+            return;
+        }
+    }
+    
     // Spawn the individual blocks for the new tetromino
     for block_position in blocks {
         commands.spawn((
@@ -422,10 +437,6 @@ fn spawn_tetromino(mut commands: Commands) {
         ));
     }
     println!("New tetromino spawned!");
-}
-
-// A system to handle the transition to the Playing state.
-fn transition_to_playing(mut next_state: ResMut<NextState<GameState>>) {
     next_state.set(GameState::Playing);
 }
 
