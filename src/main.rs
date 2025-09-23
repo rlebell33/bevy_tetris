@@ -102,6 +102,8 @@ fn main() {
         // Add a startup system to set up the game environment once.
         // This system will be responsible for things like setting up the camera.
         .add_systems(Startup, setup_camera)
+
+        .add_systems(Startup, setup_audio)
         // Add systems for the Title state
         .add_systems(
             OnEnter(GameState::Title),
@@ -116,8 +118,10 @@ fn main() {
         // transition back to Playing.
         .add_systems(
             OnEnter(GameState::Spawning),
-            (clear_lines, setup_grid, spawn_tetromino, setup_scoreboard).chain(),
+            (clear_lines, spawn_tetromino).chain(),
         )
+
+        .add_systems(OnEnter(GameState::Playing), (setup_grid, setup_scoreboard).chain())
         // Add a system for the main game logic that runs during the `Playing` state.
         // `update_transforms` will sync grid positions with their visual transforms.
         .add_systems(
@@ -136,6 +140,18 @@ fn setup_camera(mut commands: Commands) {
     // Spawn the camera.
     commands.spawn(Camera2d::default());
     println!("Camera set up successfully!");
+}
+
+fn setup_audio(asset_server: Res<AssetServer>, mut commands: Commands) {
+    commands.spawn((
+        AudioPlayer::new(
+            asset_server.load("sounds/162764.ogg")
+        ),
+        PlaybackSettings {
+                mode: bevy::audio::PlaybackMode::Loop,
+                ..default()
+        },
+    ));
 }
 
 // A system to set up the title screen UI.
