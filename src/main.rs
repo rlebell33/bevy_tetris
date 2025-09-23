@@ -288,6 +288,7 @@ fn setup_grid(mut commands: Commands) {
             commands.spawn((
                 Sprite {
                     color: bevy::prelude::Color::srgb(0.2, 0.2, 0.2), // Dark gray color
+                    
                     custom_size: Some(Vec2::new(BLOCK_SIZE, BLOCK_SIZE)),
                     ..default()
                 },
@@ -295,7 +296,9 @@ fn setup_grid(mut commands: Commands) {
                     (x as f32 - (GRID_SIZE_X as f32 / 2.0) + 0.5) * BLOCK_SIZE,
                     (y as f32 - (GRID_SIZE_Y as f32 / 2.0) + 0.5) * BLOCK_SIZE,
                     0.0,
-                ),
+                )
+                // add a border to each block
+                .with_scale(Vec3::splat(0.95)),
             ));
         }
     }
@@ -636,13 +639,13 @@ fn spawn_tetromino(
     };
     // Define the color for the tetromino based on its shape
     let color = match random_shape {
-        Shape::I => bevy::prelude::Color::srgb(0.0, 1.0, 1.0), // Cyan
-        Shape::O => bevy::prelude::Color::srgb(1.0, 1.0, 0.0), // Yellow
-        Shape::T => bevy::prelude::Color::srgb(0.5, 0.0, 0.5), // Purple
-        Shape::L => bevy::prelude::Color::srgb(1.0, 0.65, 0.0), // Orange
-        Shape::J => bevy::prelude::Color::srgb(0.0, 0.0, 1.0), // Blue
-        Shape::S => bevy::prelude::Color::srgb(0.0, 1.0, 0.0), // Green
-        Shape::Z => bevy::prelude::Color::srgb(1.0, 0.0, 0.0), // Red
+        Shape::I => bevy::prelude::Color::srgba(0.0, 1.0, 1.0, 0.8), // Cyan
+        Shape::O => bevy::prelude::Color::srgba(1.0, 1.0, 0.0, 0.8), // Yellow
+        Shape::T => bevy::prelude::Color::srgba(0.5, 0.0, 0.5, 0.8), // Purple
+        Shape::L => bevy::prelude::Color::srgba(1.0, 0.65, 0.0, 0.8), // Orange
+        Shape::J => bevy::prelude::Color::srgba(0.0, 0.0, 1.0, 0.8), // Blue
+        Shape::S => bevy::prelude::Color::srgba(0.0, 1.0, 0.0, 0.8), // Green
+        Shape::Z => bevy::prelude::Color::srgba(1.0, 0.0, 0.0, 0.8), // Red
     };
     // Set the initial position of the tetromino's origin
     let initial_y_offset = GRID_SIZE_Y as i32 - 1;
@@ -670,6 +673,13 @@ fn spawn_tetromino(
                 custom_size: Some(Vec2::new(BLOCK_SIZE, BLOCK_SIZE)),
                 ..default()
             },
+            Transform::from_xyz(
+                (block_position.x + initial_x_offset) as f32
+                    * BLOCK_SIZE,
+                (block_position.y + initial_y_offset) as f32
+                    * BLOCK_SIZE,
+                1.0,
+            ),
             GridPosition {
                 x: block_position.x + initial_x_offset,
                 y: block_position.y + initial_y_offset,
