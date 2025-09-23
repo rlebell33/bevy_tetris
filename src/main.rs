@@ -1,6 +1,7 @@
 use bevy::prelude::*;
+use bevy_embedded_assets::EmbeddedAssetPlugin;
 use rand::seq::IndexedRandom;
-use std::collections::HashMap;
+use std::{collections::HashMap, path::Path};
 
 // We'll define our game states here later to control the game flow (e.g., MainMenu, Playing, GameOver).
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Hash, States)]
@@ -87,7 +88,7 @@ const SCOREBOARD_LINE_TEXT_PADDING: Val = Val::Px(50.0 + SCOREBOARD_FONT_SIZE);
 fn main() {
     App::new()
         // Add the default Bevy plugins for rendering, window management, input, etc.
-        .add_plugins(DefaultPlugins)
+        .add_plugins((DefaultPlugins, EmbeddedAssetPlugin::default()))
         // This is where we'll add our game state logic.
         // We're initializing it to the "Playing" state.
         .init_state::<GameState>()
@@ -135,6 +136,7 @@ fn main() {
         .run();
 }
 
+
 // A startup system to spawn a 2D camera and the UI text.
 fn setup_camera(mut commands: Commands) {
     // Spawn the camera.
@@ -143,9 +145,12 @@ fn setup_camera(mut commands: Commands) {
 }
 
 fn setup_audio(asset_server: Res<AssetServer>, mut commands: Commands) {
+    let asset_path = format!("embedded://sounds/162764.ogg");
+    
+
     commands.spawn((
         AudioPlayer::new(
-            asset_server.load("sounds/162764.ogg")
+            asset_server.load(asset_path)
         ),
         PlaybackSettings {
                 mode: bevy::audio::PlaybackMode::Loop,
