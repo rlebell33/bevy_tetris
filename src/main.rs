@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{core_pipeline::bloom::Bloom, prelude::*};
 use bevy_embedded_assets::EmbeddedAssetPlugin;
 use rand::seq::IndexedRandom;
 use std::collections::HashMap;
@@ -140,7 +140,7 @@ fn main() {
 // A startup system to spawn a 2D camera and the UI text.
 fn setup_camera(mut commands: Commands) {
     // Spawn the camera.
-    commands.spawn(Camera2d::default());
+    commands.spawn((Camera2d::default(), Camera { hdr: true, ..default() }, Bloom::default()));
     println!("Camera set up successfully!");
 }
 
@@ -162,10 +162,12 @@ fn setup_title_screen(mut commands: Commands) {
     commands.spawn((
         Camera2d::default(),
         Camera {
+            hdr: true,
             // Renders the title screen UI on top of the main camera
             order: 1,
             ..default()
         },
+        Bloom::default(),
         TitleScreen,
     ));
 
@@ -657,13 +659,13 @@ fn spawn_tetromino(
     };
     // Define the color for the tetromino based on its shape
     let color = match random_shape {
-        Shape::I => bevy::prelude::Color::srgba(0.0, 1.0, 1.0, 0.8), // Cyan
-        Shape::O => bevy::prelude::Color::srgba(1.0, 1.0, 0.0, 0.8), // Yellow
-        Shape::T => bevy::prelude::Color::srgba(0.5, 0.0, 0.5, 0.8), // Purple
-        Shape::L => bevy::prelude::Color::srgba(1.0, 0.65, 0.0, 0.8), // Orange
-        Shape::J => bevy::prelude::Color::srgba(0.0, 0.0, 1.0, 0.8), // Blue
-        Shape::S => bevy::prelude::Color::srgba(0.0, 1.0, 0.0, 0.8), // Green
-        Shape::Z => bevy::prelude::Color::srgba(1.0, 0.0, 0.0, 0.8), // Red
+        Shape::I => bevy::prelude::Color::srgba(0.0, 2.0, 2.0, 0.8), // Cyan
+        Shape::O => bevy::prelude::Color::srgba(2.0, 2.0, 0.0, 0.8), // Yellow
+        Shape::T => bevy::prelude::Color::srgba(1.5, 0.0, 1.5, 0.8), // Purple
+        Shape::L => bevy::prelude::Color::srgba(2.0, 1.65, 0.0, 0.8), // Orange
+        Shape::J => bevy::prelude::Color::srgba(0.0, 0.0, 2.0, 0.8), // Blue
+        Shape::S => bevy::prelude::Color::srgba(0.0, 2.0, 0.0, 0.8), // Green
+        Shape::Z => bevy::prelude::Color::srgba(2.0, 0.0, 0.0, 0.8), // Red
     };
     // Set the initial position of the tetromino's origin
     let initial_y_offset = GRID_SIZE_Y as i32 - 1;
