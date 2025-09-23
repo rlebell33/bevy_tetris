@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use bevy_embedded_assets::EmbeddedAssetPlugin;
 use rand::seq::IndexedRandom;
-use std::{collections::HashMap, path::Path};
+use std::collections::HashMap;
 
 // We'll define our game states here later to control the game flow (e.g., MainMenu, Playing, GameOver).
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Hash, States)]
@@ -103,7 +103,6 @@ fn main() {
         // Add a startup system to set up the game environment once.
         // This system will be responsible for things like setting up the camera.
         .add_systems(Startup, setup_camera)
-
         .add_systems(Startup, setup_audio)
         // Add systems for the Title state
         .add_systems(
@@ -121,8 +120,10 @@ fn main() {
             OnEnter(GameState::Spawning),
             (clear_lines, spawn_tetromino).chain(),
         )
-
-        .add_systems(OnEnter(GameState::Playing), (setup_grid, setup_scoreboard).chain())
+        .add_systems(
+            OnEnter(GameState::Playing),
+            (setup_grid, setup_scoreboard).chain(),
+        )
         // Add a system for the main game logic that runs during the `Playing` state.
         // `update_transforms` will sync grid positions with their visual transforms.
         .add_systems(
@@ -136,7 +137,6 @@ fn main() {
         .run();
 }
 
-
 // A startup system to spawn a 2D camera and the UI text.
 fn setup_camera(mut commands: Commands) {
     // Spawn the camera.
@@ -146,15 +146,12 @@ fn setup_camera(mut commands: Commands) {
 
 fn setup_audio(asset_server: Res<AssetServer>, mut commands: Commands) {
     let asset_path = format!("embedded://sounds/162764.ogg");
-    
 
     commands.spawn((
-        AudioPlayer::new(
-            asset_server.load(asset_path)
-        ),
+        AudioPlayer::new(asset_server.load(asset_path)),
         PlaybackSettings {
-                mode: bevy::audio::PlaybackMode::Loop,
-                ..default()
+            mode: bevy::audio::PlaybackMode::Loop,
+            ..default()
         },
     ));
 }
@@ -309,7 +306,7 @@ fn setup_grid(mut commands: Commands) {
             commands.spawn((
                 Sprite {
                     color: bevy::prelude::Color::srgb(0.2, 0.2, 0.2), // Dark gray color
-                    
+
                     custom_size: Some(Vec2::new(BLOCK_SIZE, BLOCK_SIZE)),
                     ..default()
                 },
@@ -695,10 +692,8 @@ fn spawn_tetromino(
                 ..default()
             },
             Transform::from_xyz(
-                (block_position.x + initial_x_offset) as f32
-                    * BLOCK_SIZE,
-                (block_position.y + initial_y_offset) as f32
-                    * BLOCK_SIZE,
+                (block_position.x + initial_x_offset) as f32 * BLOCK_SIZE,
+                (block_position.y + initial_y_offset) as f32 * BLOCK_SIZE,
                 1.0,
             ),
             GridPosition {
