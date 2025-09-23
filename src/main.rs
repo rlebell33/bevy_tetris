@@ -332,7 +332,7 @@ fn handle_input(
     input: Res<ButtonInput<KeyCode>>,
     current_state: Res<State<GameState>>,
     mut next_state: ResMut<NextState<GameState>>,
-    mut tetromino_query: Query<(Entity, &mut GridPosition), With<Tetromino>>,
+    mut tetromino_query: Query<(Entity, &mut GridPosition, Option<&RotationCenter>), With<Tetromino>>,
     grid_query: Query<&GridPosition, Without<Tetromino>>,
     grid_entities: Query<Entity, With<GridPosition>>,
 ) {
@@ -354,7 +354,7 @@ fn handle_input(
         }
         return;
     }
-
+    
     // Reset the game when 'R' is pressed
     if input.just_pressed(KeyCode::KeyR)
         && (*current_state.get() == GameState::Playing
@@ -381,22 +381,30 @@ fn handle_input(
             let mut can_rotate = true;
             let mut new_positions = Vec::new();
 
-            // For a simple Tetris clone, we can assume the rotation center is the 2nd block
-            // of a given tetromino.
-            let rotation_center = tetromino_query.iter().nth(1).unwrap().1.clone();
+            // Find the rotation center's current grid position
+            let rotation_center_pos = tetromino_query
+                .iter()
+                .find_map(|(_, pos, center)| {
+                    if center.is_some() {
+                        Some(*pos)
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or(GridPosition { x: 0, y: 0 });
 
-            for (entity, position) in tetromino_query.iter() {
+            for (entity, position, _) in tetromino_query.iter() {
                 // Calculate position relative to the rotation center
-                let relative_x = position.x - rotation_center.x;
-                let relative_y = position.y - rotation_center.y;
+                let relative_x = position.x - rotation_center_pos.x;
+                let relative_y = position.y - rotation_center_pos.y;
 
-                // Rotate 90 degrees clockwise (x, y) -> (y, -x)
+                // Rotate 90 degrees clockwise: (x, y) -> (y, -x)
                 let rotated_x = relative_y;
                 let rotated_y = -relative_x;
 
                 let new_pos = GridPosition {
-                    x: rotated_x + rotation_center.x,
-                    y: rotated_y + rotation_center.y,
+                    x: rotated_x + rotation_center_pos.x,
+                    y: rotated_y + rotation_center_pos.y,
                 };
 
                 if check_collision(new_pos, &static_blocks) {
@@ -413,10 +421,9 @@ fn handle_input(
                 }
             }
         }
-
         if input.just_pressed(KeyCode::ArrowLeft) {
             let mut can_move = true;
-            for (_entity, position) in tetromino_query.iter() {
+            for (_entity, position, _) in tetromino_query.iter() {
                 let new_pos = GridPosition {
                     x: position.x - 1,
                     y: position.y,
@@ -427,14 +434,14 @@ fn handle_input(
                 }
             }
             if can_move {
-                for (_entity, mut position) in tetromino_query.iter_mut() {
+                for (_entity, mut position, _) in tetromino_query.iter_mut() {
                     position.x -= 1;
                 }
             }
         }
         if input.just_pressed(KeyCode::ArrowRight) {
             let mut can_move = true;
-            for (_entity, position) in tetromino_query.iter() {
+            for (_entity, position, _) in tetromino_query.iter() {
                 let new_pos = GridPosition {
                     x: position.x + 1,
                     y: position.y,
@@ -445,14 +452,14 @@ fn handle_input(
                 }
             }
             if can_move {
-                for (_entity, mut position) in tetromino_query.iter_mut() {
+                for (_entity, mut position, _) in tetromino_query.iter_mut() {
                     position.x += 1;
                 }
             }
         }
         if input.just_pressed(KeyCode::ArrowDown) {
             let mut can_move = true;
-            for (_entity, position) in tetromino_query.iter() {
+            for (_entity, position, _) in tetromino_query.iter() {
                 let new_pos = GridPosition {
                     x: position.x,
                     y: position.y - 1,
@@ -463,7 +470,7 @@ fn handle_input(
                 }
             }
             if can_move {
-                for (_entity, mut position) in tetromino_query.iter_mut() {
+                for (_entity, mut position, _) in tetromino_query.iter_mut() {
                     position.y -= 1;
                 }
             }
@@ -473,7 +480,7 @@ fn handle_input(
             let mut can_move = true;
             while can_move {
                 let mut temp_positions: Vec<GridPosition> = Vec::new();
-                for (_entity, position) in tetromino_query.iter() {
+                for (_entity, position, _) in tetromino_query.iter() {
                     let new_pos = GridPosition {
                         x: position.x,
                         y: position.y - 1,
@@ -486,11 +493,11 @@ fn handle_input(
                 }
 
                 if can_move {
-                    for (_entity, mut position) in tetromino_query.iter_mut() {
+                    for (_entity, mut position, _) in tetromino_query.iter_mut() {
                         position.y -= 1;
                     }
                 } else {
-                    for (entity, _) in tetromino_query.iter() {
+                    for (entity, _, _) in tetromino_query.iter() {
                         commands.entity(entity).remove::<Tetromino>();
                     }
                     next_state.set(GameState::Spawning);
@@ -686,8 +693,8 @@ fn spawn_tetromino(
     }
 
     // Spawn the individual blocks for the new tetromino
-    for block_position in blocks {
-        commands.spawn((
+    for (i, block_position) in blocks.iter().enumerate() {
+        let mut entity_commands = commands.spawn((
             Sprite {
                 color,
                 custom_size: Some(Vec2::new(BLOCK_SIZE, BLOCK_SIZE)),
@@ -704,6 +711,24 @@ fn spawn_tetromino(
             },
             Tetromino,
         ));
+// Add the rotation center component to the correct block
+        let rotation_center_index = match random_shape {
+            Shape::I => Some(1),
+            Shape::O => None,
+            Shape::T => Some(0),
+            Shape::L => Some(0),
+            Shape::J => Some(0),
+            Shape::S => Some(0),
+            Shape::Z => Some(0),
+        };
+        if let Some(index) = rotation_center_index {
+            if i == index {
+                entity_commands.insert(RotationCenter(GridPosition {
+                    x: block_position.x + initial_x_offset,
+                    y: block_position.y + initial_y_offset,
+                }));
+            }
+        }
     }
     println!("New tetromino spawned!");
     next_state.set(GameState::Playing);
