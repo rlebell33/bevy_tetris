@@ -75,6 +75,10 @@ enum Scoreboard {
 #[derive(Component)]
 struct TitleScreen;
 
+// A component to identify all entities on the pause screen
+#[derive(Component)]
+struct PauseMenu;
+
 // Constants for the game grid
 const GRID_SIZE_X: i32 = 10;
 const GRID_SIZE_Y: i32 = 20;
@@ -112,6 +116,9 @@ fn main() {
         .add_systems(OnExit(GameState::Title), despawn_title_screen)
         // Add systems for the Playing state
         // .add_systems(OnEnter(GameState::Playing), (setup_grid, spawn_tetromino, setup_scoreboard).chain())
+        // Add systems for the Paused state
+        .add_systems(OnEnter(GameState::Paused), setup_pause_menu)
+        .add_systems(OnExit(GameState::Paused), despawn_pause_menu)
         // Systems for handling user input. This will now run in all states.
         .add_systems(Update, handle_input)
         // When we enter the Spawning state, we'll clear lines, spawn a new piece, and immediately
@@ -214,11 +221,66 @@ fn setup_title_screen(mut commands: Commands) {
         },
         TitleScreen,
     ));
+
+    commands.spawn((
+        Text::new("P to pause | R to reset"),
+        TextFont {
+            font_size: 20.0,
+            ..default()
+        },
+        TextColor(bevy::prelude::Color::WHITE),
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Px(350.0),
+            left: Val::Percent(50.0),
+            // offset by half the text width to truly center it
+            margin: UiRect {
+                left: Val::Px(-85.0), // Approximate half the width of the text
+                ..default()
+            },
+            ..default()
+        },
+        TitleScreen,
+    ));
     println!("Title screen set up successfully!");
 }
 
 // A system to despawn the title screen entities.
 fn despawn_title_screen(mut commands: Commands, query: Query<Entity, With<TitleScreen>>) {
+    for entity in query.iter() {
+        commands.entity(entity).despawn();
+    }
+}
+
+// A system to set up the pause menu.
+fn setup_pause_menu(mut commands: Commands) {
+    // Spawn a transparent background that covers the whole screen
+    commands.spawn((
+            Node {
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.0),
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::Center,
+                ..default()
+            },
+            BackgroundColor(bevy::prelude::Color::srgba(0.0, 0.0, 0.0, 0.7)),
+            PauseMenu,
+        ))
+        .with_children(|parent| {
+            // "PAUSED" text
+            parent.spawn((
+                Text::new("PAUSED"),
+                TextFont {
+                    font_size: 60.0,
+                    ..default()
+                },
+                TextColor(bevy::prelude::Color::WHITE),
+            ));
+        });
+}
+
+// A system to despawn the pause menu.
+fn despawn_pause_menu(mut commands: Commands, query: Query<Entity, With<PauseMenu>>) {
     for entity in query.iter() {
         commands.entity(entity).despawn();
     }
@@ -348,13 +410,13 @@ fn handle_input(
         if *current_state.get() == GameState::Playing {
             next_state.set(GameState::Paused);
             println!("Game Paused");
-        } else {
+        } else if *current_state.get() == GameState::Paused {
             next_state.set(GameState::Playing);
             println!("Game Resumed");
         }
         return;
     }
-    
+
     // Reset the game when 'R' is pressed
     if input.just_pressed(KeyCode::KeyR)
         && (*current_state.get() == GameState::Playing
@@ -711,7 +773,7 @@ fn spawn_tetromino(
             },
             Tetromino,
         ));
-// Add the rotation center component to the correct block
+        // Add the rotation center component to the correct block
         let rotation_center_index = match random_shape {
             Shape::I => Some(1),
             Shape::O => None,
