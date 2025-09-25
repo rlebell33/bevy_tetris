@@ -79,6 +79,9 @@ struct TitleScreen;
 #[derive(Component)]
 struct PauseMenu;
 
+#[derive(Component)]
+struct GameOverOverlay;
+
 // Constants for the game grid
 const GRID_SIZE_X: i32 = 10;
 const GRID_SIZE_Y: i32 = 20;
@@ -119,6 +122,11 @@ fn main() {
         // Add systems for the Paused state
         .add_systems(OnEnter(GameState::Paused), setup_pause_menu)
         .add_systems(OnExit(GameState::Paused), despawn_pause_menu)
+
+        // Add systems for the Paused state
+        .add_systems(OnEnter(GameState::GameOver), setup_game_over_screen)
+        .add_systems(OnExit(GameState::GameOver), despawn_game_over_screen)
+
         // Systems for handling user input. This will now run in all states.
         .add_systems(Update, handle_input)
         // When we enter the Spawning state, we'll clear lines, spawn a new piece, and immediately
@@ -281,6 +289,48 @@ fn setup_pause_menu(mut commands: Commands) {
 
 // A system to despawn the pause menu.
 fn despawn_pause_menu(mut commands: Commands, query: Query<Entity, With<PauseMenu>>) {
+    for entity in query.iter() {
+        commands.entity(entity).despawn();
+    }
+}
+
+fn setup_game_over_screen(mut commands: Commands) {
+    // Spawn a transparent background that covers the whole screen
+    commands.spawn((
+            Node {
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.0),
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::Center,
+                ..default()
+            },
+            BackgroundColor(bevy::prelude::Color::srgba(0.0, 0.0, 0.0, 0.7)),
+            GameOverOverlay,
+        ))
+        .with_children(|parent| {
+            // "GAME OVER" text
+            parent.spawn((
+                Text::new("GAME OVER"),
+                TextFont {
+                    font_size: 60.0,
+                    ..default()
+                },
+                TextColor(bevy::prelude::Color::WHITE),
+            ));
+
+            parent.spawn((
+                Text::new("Press R to restart"),
+                TextFont {
+                    font_size: 20.0,
+                    ..default()
+                },
+                TextColor(bevy::prelude::Color::WHITE),
+                //todo: fix positioning
+            ));
+        });
+}
+
+fn despawn_game_over_screen(mut commands: Commands, query: Query<Entity, With<GameOverOverlay>>) {
     for entity in query.iter() {
         commands.entity(entity).despawn();
     }
