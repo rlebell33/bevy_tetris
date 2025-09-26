@@ -316,6 +316,17 @@ fn setup_game_over_screen(mut commands: Commands) {
                     ..default()
                 },
                 TextColor(bevy::prelude::Color::WHITE),
+                Node {
+                    position_type: PositionType::Absolute,
+                    top: Val::Px(200.0),
+                    left: Val::Percent(50.0),
+                    // offset by half the text width to truly center it
+                    margin: UiRect {
+                        left: Val::Px(-163.0), // Approximate half the width of the text
+                        ..default()
+                    },
+                    ..default()
+                }
             ));
 
             parent.spawn((
@@ -325,7 +336,17 @@ fn setup_game_over_screen(mut commands: Commands) {
                     ..default()
                 },
                 TextColor(bevy::prelude::Color::WHITE),
-                //todo: fix positioning
+                Node {
+                    position_type: PositionType::Absolute,
+                    top: Val::Px(275.0),
+                    left: Val::Percent(50.0),
+                    // offset by half the text width to truly center it
+                    margin: UiRect {
+                        left: Val::Px(-107.0), // Approximate half the width of the text
+                        ..default()
+                    },
+                    ..default()
+                }
             ));
         });
 }
