@@ -82,6 +82,14 @@ struct PauseMenu;
 #[derive(Component)]
 struct GameOverOverlay;
 
+// NEW: Resource to hold the shape of the next piece to spawn
+#[derive(Resource, Clone, Copy)]
+struct NextPiece(Shape);
+
+// NEW: Marker for blocks that are part of the next piece preview
+#[derive(Component)]
+struct PreviewBlock;
+
 // Constants for the game grid
 const GRID_SIZE_X: i32 = 10;
 const GRID_SIZE_Y: i32 = 20;
@@ -93,32 +101,44 @@ const SCOREBOARD_TEXT_PADDING: Val = Val::Px(50.0);
 const SCOREBOARD_LINE_TEXT_PADDING: Val = Val::Px(50.0 + SCOREBOARD_FONT_SIZE);
 
 fn main() {
+    // Determine the very first piece to put into the NextPiece resource
+    let first_next_shape = [
+        Shape::I,
+        Shape::O,
+        Shape::T,
+        Shape::L,
+        Shape::J,
+        Shape::S,
+        Shape::Z,
+    ]
+    .choose(&mut rand::rng()) // Use thread_rng for initial randomness
+    .unwrap()
+    .clone();
+
     App::new()
         // Add the default Bevy plugins for rendering, window management, input, etc.
         .add_plugins((DefaultPlugins, EmbeddedAssetPlugin::default()))
         // This is where we'll add our game state logic.
         // We're initializing it to the "Playing" state.
         .init_state::<GameState>()
-        // Insert a resource to control the fall speed.
+        // Insert Resources
         .insert_resource(FallTimer(Timer::from_seconds(1.0, TimerMode::Repeating)))
-        // Insert a resource to track the score.
         .insert_resource(Score(0))
-        // Insert a resource to track the number of lines cleared.
         .insert_resource(LinesCleared(0))
-        // Insert a resource to track the current level, starting at 1.
         .insert_resource(Level(1))
+        .insert_resource(NextPiece(first_next_shape)) // Initialize the NextPiece resource
+
         // Add a startup system to set up the game environment once.
-        // This system will be responsible for things like setting up the camera.
         .add_systems(Startup, setup_camera)
         .add_systems(Startup, setup_audio)
+        
         // Add systems for the Title state
         .add_systems(
             OnEnter(GameState::Title),
             (setup_title_screen, despawn_game_board).chain(),
         )
         .add_systems(OnExit(GameState::Title), despawn_title_screen)
-        // Add systems for the Playing state
-        // .add_systems(OnEnter(GameState::Playing), (setup_grid, spawn_tetromino, setup_scoreboard).chain())
+        
         // Add systems for the Paused state
         .add_systems(OnEnter(GameState::Paused), setup_pause_menu)
         .add_systems(OnExit(GameState::Paused), despawn_pause_menu)
@@ -129,6 +149,7 @@ fn main() {
 
         // Systems for handling user input. This will now run in all states.
         .add_systems(Update, handle_input)
+        
         // When we enter the Spawning state, we'll clear lines, spawn a new piece, and immediately
         // transition back to Playing.
         .add_systems(
@@ -137,13 +158,13 @@ fn main() {
         )
         .add_systems(
             OnEnter(GameState::Playing),
-            (setup_grid, setup_scoreboard).chain(),
+            (setup_grid, setup_scoreboard, setup_next_piece_preview).chain(),
         )
         // Add a system for the main game logic that runs during the `Playing` state.
         // `update_transforms` will sync grid positions with their visual transforms.
         .add_systems(
             Update,
-            (gravity_system, update_transforms, update_scoreboard)
+            (gravity_system, update_transforms, update_scoreboard, update_next_piece_preview)
                 .run_if(in_state(GameState::Playing)),
         )
         // System to update the fall speed when the level changes
@@ -155,7 +176,14 @@ fn main() {
 // A startup system to spawn a 2D camera and the UI text.
 fn setup_camera(mut commands: Commands) {
     // Spawn the camera.
-    commands.spawn((Camera2d::default(), Camera { hdr: true, ..default() }, Bloom::default()));
+    commands.spawn((
+        Camera2d::default(),
+        Camera {
+            hdr: true,
+            ..default()
+        },
+        Bloom::default(),
+    ));
     println!("Camera set up successfully!");
 }
 
@@ -363,6 +391,7 @@ fn despawn_game_board(
     query2: Query<Entity, With<Scoreboard>>,
     query3: Query<Entity, With<Tetromino>>,
     query4: Query<Entity, With<Sprite>>,
+    query5: Query<Entity, With<PreviewBlock>>,
 ) {
     for entity in query1.iter() {
         commands.entity(entity).despawn();
@@ -375,6 +404,139 @@ fn despawn_game_board(
     }
     for entity in query4.iter() {
         commands.entity(entity).despawn();
+    }
+    for entity in query5.iter() {
+        commands.entity(entity).despawn();
+    }
+}
+
+// A system to set up the static "NEXT" label and background box for the preview.
+fn setup_next_piece_preview(mut commands: Commands) {
+    // World coordinates for the top-right area, outside the grid
+    let preview_center_x = (GRID_SIZE_X as f32 / 2.0 + 3.5) * BLOCK_SIZE;
+    let preview_center_y = (GRID_SIZE_Y as f32 / 2.0 - 5.0) * BLOCK_SIZE;
+    let preview_width = 6.0 * BLOCK_SIZE;
+    let preview_height = 5.0 * BLOCK_SIZE;
+
+    // 1. Static Preview Box (Background)
+    commands.spawn((
+        Sprite {
+            color: bevy::prelude::Color::srgba(0.1, 0.1, 0.1, 0.9), // Dark background box
+            custom_size: Some(Vec2::new(preview_width, preview_height)),
+            ..default()
+        },
+        Transform::from_xyz(preview_center_x, preview_center_y, 0.5),
+        PreviewBlock,
+    ));
+
+    commands.spawn((
+        Text::new("Next"),
+        TextFont {
+            font_size: SCOREBOARD_FONT_SIZE,
+            ..default()
+        },
+        TextColor(bevy::prelude::Color::WHITE),
+        Node {
+            position_type: PositionType::Absolute,
+            top: SCOREBOARD_LINE_TEXT_PADDING,
+            left: SCOREBOARD_TEXT_PADDING,
+            ..default()
+        },
+        PreviewBlock,
+    ));
+}
+
+// A system to draw the next piece blocks
+fn update_next_piece_preview(
+    mut commands: Commands,
+    next_piece: Res<NextPiece>,
+    block_query: Query<Entity, With<PreviewBlock>>,
+) {
+    // World coordinates for centering the blocks in the preview box
+    let center_x = (GRID_SIZE_X as f32 / 2.0 + 3.5) * BLOCK_SIZE;
+    let center_y = (GRID_SIZE_Y as f32 / 2.0 - 5.0) * BLOCK_SIZE;
+
+    // Only update when the next piece resource has changed
+    if next_piece.is_changed() {
+        // 1. Despawn old preview blocks
+        for entity in block_query.iter() {
+            commands.entity(entity).despawn();
+        }
+
+        // Get the shape and color of the next piece
+        let shape_to_preview = next_piece.0;
+
+        // Define the blocks for each shape, relative to the piece's origin
+        let blocks = match shape_to_preview {
+            Shape::I => vec![
+                GridPosition { x: -1, y: 0 },
+                GridPosition { x: 0, y: 0 },
+                GridPosition { x: 1, y: 0 },
+                GridPosition { x: 2, y: 0 },
+            ],
+            Shape::O => vec![
+                GridPosition { x: 0, y: 0 },
+                GridPosition { x: 0, y: 1 },
+                GridPosition { x: 1, y: 0 },
+                GridPosition { x: 1, y: 1 },
+            ],
+            Shape::T => vec![
+                GridPosition { x: 0, y: 0 },
+                GridPosition { x: -1, y: 0 },
+                GridPosition { x: 1, y: 0 },
+                GridPosition { x: 0, y: 1 },
+            ],
+            Shape::L => vec![
+                GridPosition { x: 0, y: 0 },
+                GridPosition { x: -1, y: 0 },
+                GridPosition { x: 1, y: 0 },
+                GridPosition { x: 1, y: 1 },
+            ],
+            Shape::J => vec![
+                GridPosition { x: 0, y: 0 },
+                GridPosition { x: -1, y: 0 },
+                GridPosition { x: 1, y: 0 },
+                GridPosition { x: -1, y: 1 },
+            ],
+            Shape::S => vec![
+                GridPosition { x: 0, y: 0 },
+                GridPosition { x: 1, y: 0 },
+                GridPosition { x: 0, y: 1 },
+                GridPosition { x: -1, y: 1 },
+            ],
+            Shape::Z => vec![
+                GridPosition { x: 0, y: 0 },
+                GridPosition { x: -1, y: 0 },
+                GridPosition { x: 0, y: 1 },
+                GridPosition { x: 1, y: 1 },
+            ],
+        };
+        let color = match shape_to_preview {
+            Shape::I => bevy::prelude::Color::srgba(0.0, 2.0, 2.0, 0.8), // Cyan
+            Shape::O => bevy::prelude::Color::srgba(2.0, 2.0, 0.0, 0.8), // Yellow
+            Shape::T => bevy::prelude::Color::srgba(1.5, 0.0, 1.5, 0.8), // Purple
+            Shape::L => bevy::prelude::Color::srgba(2.0, 1.65, 0.0, 0.8), // Orange
+            Shape::J => bevy::prelude::Color::srgba(0.0, 0.0, 2.0, 0.8), // Blue
+            Shape::S => bevy::prelude::Color::srgba(0.0, 2.0, 0.0, 0.8), // Green
+            Shape::Z => bevy::prelude::Color::srgba(2.0, 0.0, 0.0, 0.8), // Red
+        };
+
+        // 3. Spawn the new preview blocks
+        for block_position in blocks.iter() {
+            commands.spawn((
+                Sprite {
+                    color,
+                    custom_size: Some(Vec2::new(BLOCK_SIZE, BLOCK_SIZE)),
+                    ..default()
+                },
+                Transform::from_xyz(
+                    center_x + block_position.x as f32 * BLOCK_SIZE,
+                    center_y + block_position.y as f32 * BLOCK_SIZE,
+                    1.5, // Z is higher than the box background
+                ),
+                PreviewBlock,
+            ));
+        }
     }
 }
 
@@ -500,7 +662,7 @@ fn handle_input(
         }
         commands.insert_resource(Score(0));
         commands.insert_resource(LinesCleared(0));
-        commands.insert_resource(Level(1));
+        commands.insert_resource(Level(1)); 
         next_state.set(GameState::Title);
         return;
     }
@@ -739,8 +901,12 @@ fn spawn_tetromino(
     mut commands: Commands,
     mut next_state: ResMut<NextState<GameState>>,
     grid_query: Query<&GridPosition, Without<Tetromino>>,
+    mut next_piece: ResMut<NextPiece>,
 ) {
-    // A list of the seven tetromino shapes
+    // 1. Determine the shape to spawn (It's the NextPiece from the previous cycle)
+    let current_shape_to_spawn = next_piece.0;
+
+    // 2. Generate the shape for the *next* spawn (and store it)
     let shapes = [
         Shape::I,
         Shape::O,
@@ -751,9 +917,12 @@ fn spawn_tetromino(
         Shape::Z,
     ];
     // Pick a random shape from the list
-    let random_shape = shapes.choose(&mut rand::rng()).unwrap();
-    // Define the blocks for each shape, relative to the piece's origin
-    let blocks = match random_shape {
+    let new_next_shape = shapes.choose(&mut rand::rng()).unwrap().clone();
+    next_piece.0 = new_next_shape;
+
+
+    // Define the blocks for the CURRENT shape, relative to the piece's origin
+    let blocks = match current_shape_to_spawn {
         Shape::I => vec![
             GridPosition { x: -1, y: 0 },
             GridPosition { x: 0, y: 0 },
@@ -798,7 +967,7 @@ fn spawn_tetromino(
         ],
     };
     // Define the color for the tetromino based on its shape
-    let color = match random_shape {
+    let color = match current_shape_to_spawn {
         Shape::I => bevy::prelude::Color::srgba(0.0, 2.0, 2.0, 0.8), // Cyan
         Shape::O => bevy::prelude::Color::srgba(2.0, 2.0, 0.0, 0.8), // Yellow
         Shape::T => bevy::prelude::Color::srgba(1.5, 0.0, 1.5, 0.8), // Purple
@@ -845,7 +1014,7 @@ fn spawn_tetromino(
             Tetromino,
         ));
         // Add the rotation center component to the correct block
-        let rotation_center_index = match random_shape {
+        let rotation_center_index = match current_shape_to_spawn {
             Shape::I => Some(1),
             Shape::O => None,
             Shape::T => Some(0),
