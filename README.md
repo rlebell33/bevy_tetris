@@ -4,8 +4,6 @@ A simple project of recreating Tetris in Rust using Bevy.
 
 ## Screenshots
 
-*Screenshots coming soon! Feel free to add gameplay images here.*
-
 ![Title Screen](screenshots/title_screen.png)
 *Title screen with game instructions*
 
