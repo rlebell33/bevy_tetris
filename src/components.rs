@@ -8,10 +8,6 @@ pub struct GridPosition {
     pub y: i32,
 }
 
-/// Represents the color of a block.
-#[derive(Component)]
-pub struct Color(pub bevy::prelude::Color);
-
 /// Represents the different shapes a tetromino can have.
 #[derive(Component, Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Shape {
